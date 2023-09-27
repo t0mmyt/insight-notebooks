@@ -5,6 +5,8 @@ import requests
 import pandas as pd
 import xml.etree.ElementTree as et
 
+from dateutil.parser import isoparse
+
 
 class CatalogDFs(NamedTuple):
     events: pd.DataFrame
@@ -77,15 +79,21 @@ class InsightCatalog:
                     if phase == "start":
                         azimuth = arrival.find("bed:azimuth", self.ns)
                         if azimuth is not None:
-                            row["mqs_azimuth"] = azimuth.text
+                            row["mqs_azimuth"] = float(azimuth.text)
                         distance = arrival.find("bed:distance", self.ns)
                         if distance is not None:
-                            row["mqs_distance"] = distance.text
+                            row["mqs_distance"] = float(distance.text)
 
             for pick in event.iterfind("bed:pick", self.ns):
                 phase_hint = pick.find("bed:phaseHint", self.ns).text
-                if phase_hint == "start":
-                    row["est_p_arrival"] = pick.find("bed:time", self.ns).find("bed:value", self.ns).text
+                if phase_hint == "P":
+                    row["p_arrival"] = isoparse(pick.find("bed:time", self.ns).find("bed:value", self.ns).text)
+                    break
+
+            for pick in event.iterfind("bed:pick", self.ns):
+                phase_hint = pick.find("bed:phaseHint", self.ns).text
+                if phase_hint == "PP":
+                    row["pp_arrival"] = isoparse(pick.find("bed:time", self.ns).find("bed:value", self.ns).text)
                     break
 
             for mag in event.iterfind("bed:magnitude", self.ns):
