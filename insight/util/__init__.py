@@ -6,6 +6,7 @@ from obspy.core import Trace
 from seispy.decon import RFTrace
 
 from .download import download_file, EventDownloader, TraceFile
+from .metrics import snr
 
 
 def trace_plot(axes: Axes, trace: Trace, start=10, end=40, y_offset=0):

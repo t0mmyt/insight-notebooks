@@ -10,6 +10,7 @@ from dateutil.parser import isoparse
 
 class CatalogDFs(NamedTuple):
     events: pd.DataFrame
+    picks: pd.DataFrame
 
 
 class InsightCatalog:
@@ -33,7 +34,7 @@ class InsightCatalog:
 
         for node in xroot:
             if node.tag == "{http://quakeml.org/xmlns/bed/1.2}eventParameters":
-                events = self._events(node)
+                events, picks = self._events(node)
             elif node.tag == "{http://quakeml.org/xmlns/singlestation/1.0}singleStationParameters":
                 pass
             elif node.tag == "{http://quakeml.org/xmlns/marsquake/1.0}marsquakeParameters":
@@ -41,6 +42,7 @@ class InsightCatalog:
 
         return CatalogDFs(
             events=events,
+            picks=picks,
         )
 
     def _download_catalog(self):
@@ -55,51 +57,61 @@ class InsightCatalog:
                     f.write(chunk)
 
     def _events(self, node: et.Element):
-        rows = []
+        event_rows = []
+        pick_rows = []
         for event in node.iterfind("bed:event", self.ns):
             evt_id = event.get("publicID")
-            row = {"id": evt_id[evt_id.rfind("/") + 1:]}
+            event_row = {"id": evt_id[evt_id.rfind("/") + 1:]}
             for desc in event.findall("bed:description", self.ns):
                 desc_text = desc.find("bed:text", self.ns).text
                 desc_type = desc.find("bed:type", self.ns).text
-                row[desc_type] = desc_text
+                event_row[desc_type] = desc_text
 
             origin = event.find("bed:origin", self.ns)
             if origin is not None:
                 evt_time = origin.find("bed:time", self.ns)
                 if evt_time is not None:
-                    row["time"] = evt_time.find("bed:value", self.ns).text
+                    event_row["time"] = evt_time.find("bed:value", self.ns).text
 
                 quality = origin.find("mars:locationQuality", self.ns)
                 if quality is not None:
-                    row["quality"] = quality.text[-1]
+                    event_row["quality"] = quality.text[-1]
 
                 for arrival in origin.iterfind("bed:arrival", self.ns):
                     phase = arrival.find("bed:phase", self.ns).text
                     if phase == "start":
                         azimuth = arrival.find("bed:azimuth", self.ns)
                         if azimuth is not None:
-                            row["mqs_azimuth"] = float(azimuth.text)
+                            event_row["mqs_azimuth"] = float(azimuth.text)
                         distance = arrival.find("bed:distance", self.ns)
                         if distance is not None:
-                            row["mqs_distance"] = float(distance.text)
+                            event_row["mqs_distance"] = float(distance.text)
 
             for pick in event.iterfind("bed:pick", self.ns):
-                phase_hint = pick.find("bed:phaseHint", self.ns).text
-                if phase_hint == "P":
-                    row["p_arrival"] = isoparse(pick.find("bed:time", self.ns).find("bed:value", self.ns).text)
-                    break
-
-            for pick in event.iterfind("bed:pick", self.ns):
-                phase_hint = pick.find("bed:phaseHint", self.ns).text
-                if phase_hint == "PP":
-                    row["pp_arrival"] = isoparse(pick.find("bed:time", self.ns).find("bed:value", self.ns).text)
-                    break
+                pick_row = {
+                    "earthquake name": event_row["earthquake name"],
+                    "id": evt_id[evt_id.rfind("/") + 1:],
+                    "phase": pick.find("bed:phaseHint", self.ns).text,
+                    "arrival": isoparse(pick.find("bed:time", self.ns).find("bed:value", self.ns).text),
+                }
+                waveform_id = pick.find("bed:waveformID", self.ns)
+                pick_row["channel"] = waveform_id.attrib["channelCode"] if waveform_id is not None else None
+                creation_info = pick.find("bed:creationInfo", self.ns)
+                if creation_info is not None:
+                    agency_id = creation_info.find("bed:agencyID", self.ns)
+                    if agency_id is not None:
+                        pick_row["agency_id"] = agency_id.text
+                    author = creation_info.find("bed:author", self.ns)
+                    if author is not None:
+                        pick_row["author"] = author.text
+                pick_rows.append(pick_row)
 
             for mag in event.iterfind("bed:magnitude", self.ns):
                 if mag.find("bed:type", self.ns).text == "MW":
-                    row["M_w"] = mag.find("bed:mag", self.ns).find("bed:value", self.ns).text
+                    event_row["M_w"] = mag.find("bed:mag", self.ns).find("bed:value", self.ns).text
                     break
 
-            rows.append(row)
-        return pd.DataFrame(rows)
+            event_rows.append(event_row)
+        df_events = pd.DataFrame(event_rows).set_index("earthquake name")
+        df_picks = pd.DataFrame(pick_rows).set_index("earthquake name")
+        return df_events, df_picks
