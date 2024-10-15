@@ -18,15 +18,8 @@ class TraceFile(NamedTuple):
     format: str = "MSEED"
 
     def __str__(self):
+        # Returns a formatted filename for the stream, e.g. 'XB.ELYSE.02.MQS2019JZQA.mseed'
         return f"{self.network}.{self.station}.{self.location}.{self.evt_id}".upper() + f".{self.format.lower()}"
-
-
-def download_file(url: str, path: str):
-    with requests.get(url, stream=True) as resp:
-        resp.raise_for_status()
-        with open(path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=65536):
-                f.write(chunk)
 
 
 class EventDownloader:
@@ -51,6 +44,7 @@ class EventDownloader:
     ):
         trace_file = TraceFile(network, station, location, evt_id)
         trace_file_name = os.path.join(self.traces_dir, str(trace_file))
+        # Download the stream if we don't already have it
         if not os.path.isfile(trace_file_name):
             try:
                 st = self.client.get_waveforms(
@@ -67,3 +61,11 @@ class EventDownloader:
                 return None
         st = stream.read(trace_file_name)
         return st
+
+
+def download_file(url: str, path: str):
+    with requests.get(url, stream=True) as resp:
+        resp.raise_for_status()
+        with open(path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                f.write(chunk)

@@ -1,11 +1,10 @@
 import os.path
-from typing import NamedTuple
 
-import requests
 import pandas as pd
+import requests
 import xml.etree.ElementTree as et
-
 from dateutil.parser import isoparse
+from typing import NamedTuple
 
 
 class CatalogDFs(NamedTuple):
@@ -14,6 +13,9 @@ class CatalogDFs(NamedTuple):
 
 
 class InsightCatalog:
+    """
+    Downloads an MQS catalog and builds a pandas dataframes of events and their picks
+    """
     ns = {
         "bed": "http://quakeml.org/xmlns/bed/1.2",
         "q": "http://quakeml.org/xmlns/quakeml",

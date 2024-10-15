@@ -18,5 +18,6 @@ def polarization_azimuth(stream: Stream, offset: int):
     )
     return Polarization(flinn(stream=data)[0], flinn(stream=data)[1])
 
+
 def angle_err(a, b):
     return min(abs((a - b) % 360), abs((b - a) % 360))
